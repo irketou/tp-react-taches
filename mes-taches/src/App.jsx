@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Entete from './components/Entete.jsx'
 import Carte from './components/Carte.jsx'
+import Horloge from './components/Horloge.jsx'
 import Compteur from './components/Compteur.jsx'
 import FormulaireAjout from './components/FormulaireAjout.jsx'
 import Filtres from './components/Filtres.jsx'
@@ -8,16 +9,35 @@ import ListeTaches from './components/ListeTaches.jsx'
 import Statistiques from './components/Statistiques.jsx'
 import Pied from './components/Pied.jsx'
 
-const TACHES_INITIALES = [
-  { id: 1, titre: 'Installer Node.js et Vite', terminee: true },
-{ id: 2, titre: 'Comprendre les composants', terminee: true },
-{ id: 3, titre: 'Passer des données avec les props', terminee: false },
-{ id: 4, titre: "Gérer l'état avec useState", terminee: false },
-]
-
 function App() {
-  const [taches, setTaches] = useState(TACHES_INITIALES)
+  const [taches, setTaches] = useState([])
   const [filtre, setFiltre] = useState('toutes')
+  const [chargement, setChargement] = useState(true)
+  const [erreur, setErreur] = useState(null)
+
+  // Part B: load the tasks once
+  useEffect(() => {
+    let annule = false
+
+    fetch('/taches.json')
+    .then((reponse) => {
+      if (!reponse.ok) throw new Error(`Erreur HTTP ${reponse.status}`)
+        return reponse.json()
+    })
+    .then((donnees) => {
+      if (!annule) setTaches(donnees)
+    })
+    .catch((err) => {
+      if (!annule) setErreur(err.message)
+    })
+    .finally(() => {
+      if (!annule) setChargement(false)
+    })
+
+    return () => {
+      annule = true
+    }
+  }, [])
 
   function ajouterTache(titre) {
     setTaches([...taches, { id: Date.now(), titre, terminee: false }])
@@ -35,16 +55,26 @@ function App() {
     setTaches(taches.filter((tache) => tache.id !== id))
   }
 
-  // Valeur dérivée : calculée, jamais stockée dans un useState
   const tachesVisibles = taches.filter((tache) => {
     if (filtre === 'actives') return !tache.terminee
       if (filtre === 'terminees') return tache.terminee
         return true
   })
 
+  const restantes = taches.filter((tache) => !tache.terminee).length
+
+  // Part C: sync the tab title
+  useEffect(() => {
+    document.title = `(${restantes}) Mes tâches`
+  }, [restantes])
+
   return (
     <div className="app">
     <Entete titre="Mes tâches" sousTitre="Mon premier projet React" />
+
+    <Carte titre="Heure actuelle">
+    <Horloge />
+    </Carte>
 
     <Carte titre="Compteur">
     <Compteur />
@@ -56,11 +86,15 @@ function App() {
 
     <Carte titre="Ma liste">
     <Filtres filtre={filtre} onChanger={setFiltre} />
-    <ListeTaches
-    taches={tachesVisibles}
-    onBasculer={basculerTache}
-    onSupprimer={supprimerTache}
-    />
+    {chargement && <p className="vide">Chargement des tâches…</p>}
+    {erreur && <p className="erreur">{erreur}</p>}
+    {!chargement && !erreur && (
+      <ListeTaches
+      taches={tachesVisibles}
+      onBasculer={basculerTache}
+      onSupprimer={supprimerTache}
+      />
+    )}
     </Carte>
 
     <Carte titre="Statistiques">
